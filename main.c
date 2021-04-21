@@ -349,6 +349,20 @@ static void init_cli(void)
 extern void twi_init (void);
 extern void LM75B_set_mode(void);
 extern void LM75B_read_sensor_data(void);
+
+void log_wait_ms(uint32_t ms)
+{
+    NRF_LOG_FLUSH();
+    if (ms < 2) ms = 2;
+    if (ms > 1000) ms = 1000;
+    uint32_t tm1 = m_custom_ms_counter + ms;
+    while ( m_custom_ms_counter < tm1 ) {
+#if NRF_CLI_ENABLED
+        nrf_cli_process(&m_cli_uart);
+#endif
+        nrf_delay_ms(1);
+    }
+}
 /* -------------------------------------------------------------------- */
 
 int main(void)
@@ -417,9 +431,13 @@ int main(void)
 
     /* -------------------------------------------- */
     NRF_LOG_INFO("TWI sensor example starting ...");
+    log_wait_ms(100);
     twi_init();
+    NRF_LOG_INFO("TWI sensor mode setting ...");
+    log_wait_ms(20);
     LM75B_set_mode();
     NRF_LOG_INFO("TWI sensor mode was set.");
+    log_wait_ms(20);
     /* -------------------------------------------- */
 
     while (true)

@@ -83,7 +83,7 @@
 #define ARDUINO_3_SDA_PIN  (29)
 
 /* Indicates if operation on TWI has ended. */
-static volatile bool m_xfer_done = false;
+static volatile uint8_t m_twi_xfer_done = 0;
 
 /* TWI instance. */
 static const nrf_drv_twi_t m_twi = NRF_DRV_TWI_INSTANCE(TWI_INSTANCE_ID);
@@ -91,26 +91,59 @@ static const nrf_drv_twi_t m_twi = NRF_DRV_TWI_INSTANCE(TWI_INSTANCE_ID);
 /* Buffer for samples read from temperature sensor. */
 static uint8_t m_sample;
 
+/* -------------------------------------- */
+extern void log_wait_ms(uint32_t ms);
+
+static uint8_t m_mode_ok = 0;
+
+static void wait_xfer_done_ms(uint32_t ms)
+{
+    if ( ms < 4 ) ms = 4;
+    if ( ms > 1000 ) ms = 1000;
+    ms /= 2;
+    while ( ms ) {
+        if ( m_twi_xfer_done == 1 )
+            break;
+        log_wait_ms(2);
+        ms --;
+    }
+}
+/* -------------------------------------- */
+
 /**
  * @brief Function for setting active mode on MMA7660 accelerometer.
  */
 void LM75B_set_mode(void)
 {
     ret_code_t err_code;
+    uint8_t ok_cnt = 0;
+
+    NRF_LOG_INFO(" mode setting ... ");
+    log_wait_ms(2);
+
 
     /* Writing to LM75B_REG_CONF "0" set temperature sensor in NORMAL mode. */
     uint8_t reg[2] = {LM75B_REG_CONF, NORMAL_MODE};
-    m_xfer_done = false;
+    m_twi_xfer_done = 0;
     err_code = nrf_drv_twi_tx(&m_twi, LM75B_ADDR, reg, sizeof(reg), false);
     APP_ERROR_CHECK(err_code);
-    while (m_xfer_done == false);
+    /*while (m_xfer_done == false);*/
+
+    wait_xfer_done_ms(1000);
+    if ( m_twi_xfer_done == 1 ) ok_cnt ++;
 
     /* Writing to pointer byte. */
     reg[0] = LM75B_REG_TEMP;
-    m_xfer_done = false;
+    m_twi_xfer_done = 0;
     err_code = nrf_drv_twi_tx(&m_twi, LM75B_ADDR, reg, 1, false);
     APP_ERROR_CHECK(err_code);
-    while (m_xfer_done == false);
+
+    /*while (m_xfer_done == false);*/
+    wait_xfer_done_ms(1000);
+    if ( m_twi_xfer_done == 1 ) ok_cnt ++;
+
+    if (ok_cnt >= 2) m_mode_ok = 1;
+    else NRF_LOG_WARNING(" failed mode setting. ");
 }
 
 /**
@@ -136,10 +169,11 @@ void twi_handler(nrf_drv_twi_evt_t const * p_event, void * p_context)
             {
                 data_handler(m_sample);
             }
-            m_xfer_done = true;
+            m_twi_xfer_done = 1;
             break;
         default:
             NRF_LOG_WARNING("TWI event unknown type %d", p_event->type);
+            m_twi_xfer_done = 2;
             break;
     }
 }
@@ -170,11 +204,44 @@ void twi_init (void)
  */
 void LM75B_read_sensor_data()
 {
-    m_xfer_done = false;
+    if ( m_mode_ok == 0 ) {
+        LM75B_set_mode();
+    }
+    if ( m_mode_ok == 0 ) {
+        return;
+    }
+
+    m_twi_xfer_done = 0;
 
     /* Read 1 byte from the specified address - skip 3 bits dedicated for fractional part of temperature. */
     ret_code_t err_code = nrf_drv_twi_rx(&m_twi, LM75B_ADDR, &m_sample, sizeof(m_sample));
-    APP_ERROR_CHECK(err_code);
+    /*APP_ERROR_CHECK(err_code);*//*this fails with busy when wire is just connected*/
+
+#if 0 /* set to 1 to avoid the busy error code 17 */
+    wait_xfer_done_ms(200);
+    if (m_twi_xfer_done != 1) {
+        m_mode_ok = 0;
+        NRF_LOG_WARNING(" failed data reading xfer event %u. ", m_twi_xfer_done);
+    }
+#endif
+    if ( err_code != NRF_SUCCESS ) {
+        m_mode_ok = 0;
+        NRF_LOG_WARNING(" failed data reading err code %d. ", err_code);
+        NRF_LOG_WARNING(" error: %s", nrf_strerror_get(err_code));
+
+#if 0
+        /* slow down. after ~2 seconds, the error code 17 goes away, sometimes. */
+        m_twi_xfer_done = 0;
+        wait_xfer_done_ms(200);
+#else
+        /* attempt to clear the error code 17 */
+        nrf_drv_twi_disable(&m_twi);
+        nrf_drv_twi_uninit(&m_twi);
+        m_twi_xfer_done = 0;
+        wait_xfer_done_ms(20);
+        twi_init();
+#endif
+    }
 }
 
 /**
