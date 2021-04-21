@@ -137,7 +137,7 @@ static void custom_timer_handler(void * p_context)
 #define SERIAL_NUMBER_STRING_SIZE (12)
 extern uint8_t g_extern_serial_number[SERIAL_NUMBER_STRING_SIZE + 1];
 
-static char m_custom_ser_value[SERIAL_NUMBER_STRING_SIZE + 1] = "C01234778899";
+static char m_custom_ser_value[SERIAL_NUMBER_STRING_SIZE + 1] = "C01122334455";
 
 static void custom_ser_modify()
 {
@@ -344,6 +344,13 @@ static void init_cli(void)
 }
 #endif
 
+/* -------------------------------------------------------------------- */
+/* all the code from twi_sensor main.c */
+extern void twi_init (void);
+extern void LM75B_set_mode(void);
+extern void LM75B_read_sensor_data(void);
+/* -------------------------------------------------------------------- */
+
 int main(void)
 {
     ret_code_t ret;
@@ -408,6 +415,13 @@ int main(void)
         app_usbd_start();
     }
 
+    /* -------------------------------------------- */
+    NRF_LOG_INFO("TWI sensor example starting ...");
+    twi_init();
+    LM75B_set_mode();
+    NRF_LOG_INFO("TWI sensor mode was set.");
+    /* -------------------------------------------- */
+
     while (true)
     {
         while (app_usbd_event_queue_process())
@@ -431,6 +445,10 @@ int main(void)
 #if NRF_CLI_ENABLED
         nrf_cli_process(&m_cli_uart);
 #endif
+
+        /* -------------------------------------------- */
+        LM75B_read_sensor_data();
+        /* -------------------------------------------- */
 
         UNUSED_RETURN_VALUE(NRF_LOG_PROCESS());
         /* Sleep CPU only if there was no interrupt since last loop processing */

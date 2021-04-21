@@ -373,6 +373,7 @@
 // </e>
 
 // </e>
+#include "sdk_config_twi.h"
 
 // <q> NRFX_SYSTICK_ENABLED  - nrfx_systick - ARM(R) SysTick driver
  
