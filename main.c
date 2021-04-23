@@ -152,6 +152,7 @@ static void custom_ser_modify()
 /* -------------------------------------------------------------------- */
 extern void slip_reset(void);
 extern void slip_rx_add_byte(uint8_t b);
+extern uint8_t * slip_tx_encode_for_send(uint8_t *input_buffer, uint16_t *len);
 /* -------------------------------------------------------------------- */
 
 
@@ -193,7 +194,7 @@ APP_USBD_CDC_ACM_GLOBAL_DEF(m_app_cdc_acm,
 
 static char m_rx_buffer[READ_SIZE];
 static char m_tx_buffer[NRF_DRV_USBD_EPSIZE];
-static bool m_send_flag = 0;
+static uint8_t m_send_flag = 0;
 
 /**
  * @brief User event handler @ref app_usbd_cdc_acm_user_ev_handler_t (headphones)
@@ -308,6 +309,7 @@ static void bsp_event_callback(bsp_event_t ev)
 
         case CONCAT_2(BSP_EVENT_KEY_, BTN_CDC_NOTIFY_SEND):
         {
+            NRF_LOG_WARNING(" notify serial ");
             ret = app_usbd_cdc_acm_serial_state_notify(&m_app_cdc_acm,
                                                        APP_USBD_CDC_ACM_SERIAL_STATE_BREAK,
                                                        false);
@@ -461,10 +463,30 @@ int main(void)
         if(m_send_flag)
         {
             static int  frame_counter;
+            #if 0 /* single message sending */
+              m_send_flag = 0; /* comment out to continue sending */
+            #elif 1 /* 4 messages sending */
+              if ( m_send_flag++ >= 4 ) m_send_flag = 0;
+            #endif
 
-            size_t size = sprintf(m_tx_buffer, "Hello USB CDC FA demo: %u\r\n", frame_counter);
+            size_t size = snprintf(m_tx_buffer, sizeof(m_tx_buffer) - 1,
+                                    "Hello USB CDC FA demo: %u\r\n", frame_counter);
+            uint16_t tx_len = (uint16_t)size;
+            if ( size > sizeof(m_tx_buffer) - 1 ) {
+                tx_len = sizeof(m_tx_buffer) - 1;
+            }
+            uint8_t *tx_buf = slip_tx_encode_for_send(m_tx_buffer, &tx_len);
 
-            ret = app_usbd_cdc_acm_write(&m_app_cdc_acm, m_tx_buffer, size);
+            ret = NRF_SUCCESS;
+            if ( tx_buf != NULL && tx_len > 1 ) {
+                /*NRF_LOG_INFO(" tx %d len %u %u char 0x%02x", frame_counter, size, tx_len, 
+                                (tx_len>0?tx_buf[tx_len-1]:0xFFF) );*/
+                ret = app_usbd_cdc_acm_write(&m_app_cdc_acm, tx_buf, tx_len);
+            } else {
+                NRF_LOG_WARNING(" drop tx %d len %u %u char 0x%02x", frame_counter, size, tx_len, 
+                                    (tx_len>0?tx_buf[tx_len-1]:0xFFF) );
+            }
+            /*ret = app_usbd_cdc_acm_write(&m_app_cdc_acm, m_tx_buffer, size);*/
             if (ret == NRF_SUCCESS)
             {
                 ++frame_counter;

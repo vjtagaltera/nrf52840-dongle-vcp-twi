@@ -299,7 +299,7 @@ static slip_t slip = {
                 .current_index  = 0,
                 .buffer_len     = sizeof(slip_rx_buffer)};
 
-static uint8_t slip_tx_buffer[512];
+static uint8_t slip_tx_buffer[1024 + 4]; /* must be big enough to call encode() */
 
 extern void slip_on_packet_received(uint8_t *buf, uint32_t len);
 
@@ -327,10 +327,22 @@ void slip_rx_add_byte(uint8_t b)
     }
 }
 
-void slip_tx_send(uint8_t *input_buffer, uint16_t len)
+uint8_t * slip_tx_encode_for_send(uint8_t *input_buffer, uint16_t *len)
 {
     uint32_t output_length = 0;
-    slip_encode(slip_tx_buffer, input_buffer, len, &output_length);
+    if ( input_buffer == NULL || len == NULL || *len * 2 + 2 >= sizeof(slip_tx_buffer) ) {
+        NRF_LOG_WARNING(" slip encode condition failed ");
+        return NULL;
+    }
+    slip_tx_buffer[0]=0xC0; /* SLIP delineator */
+    slip_encode(slip_tx_buffer+1, input_buffer, *len, &output_length);
+    output_length += 1;
+    if ( output_length >= sizeof(slip_tx_buffer) ) {
+        NRF_LOG_WARNING(" slip encode output condition failed ");
+        return NULL;
+    }
+    *len = (uint16_t)output_length;
+    return slip_tx_buffer;
 }
 
 void slip_on_packet_received(uint8_t *buf, uint32_t len)
