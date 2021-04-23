@@ -150,6 +150,10 @@ static void custom_ser_modify()
 }
 #endif
 /* -------------------------------------------------------------------- */
+extern void slip_reset(void);
+extern void slip_rx_add_byte(uint8_t b);
+/* -------------------------------------------------------------------- */
+
 
 /**
  * @brief Enable power USB detection
@@ -232,6 +236,9 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
                 ret = app_usbd_cdc_acm_read(&m_app_cdc_acm,
                                             m_rx_buffer,
                                             READ_SIZE);
+                if ( ret == NRF_SUCCESS ) {
+                    slip_rx_add_byte(m_rx_buffer[0]);
+                }
             } while (ret == NRF_SUCCESS);
 
             bsp_board_led_invert(LED_CDC_ACM_RX);
@@ -397,6 +404,10 @@ int main(void)
         ret = app_timer_start(m_custom_timer_0, APP_TIMER_TICKS(1), NULL);
         APP_ERROR_CHECK(ret);
 #endif
+    /* -------------------------------------------- */
+    /* slip before vcp */
+    slip_reset();
+    /* -------------------------------------------- */
 
     init_bsp();
 #if NRF_CLI_ENABLED

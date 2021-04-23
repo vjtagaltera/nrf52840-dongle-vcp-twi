@@ -493,6 +493,15 @@
 // </e>
 
 /* ---------------------------------------------------------- */
+/* slip copied from peripheral/usbd_ble_uart */
+
+// <q> SLIP_ENABLED  - slip - SLIP encoding and decoding
+
+#ifndef SLIP_ENABLED
+#define SLIP_ENABLED 1
+#endif
+
+/* ---------------------------------------------------------- */
 
 #endif //SDK_CONFIG_TWI_H
 

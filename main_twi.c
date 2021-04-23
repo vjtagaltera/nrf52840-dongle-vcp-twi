@@ -92,6 +92,7 @@ static const nrf_drv_twi_t m_twi = NRF_DRV_TWI_INSTANCE(TWI_INSTANCE_ID);
 static uint8_t m_sample;
 
 /* -------------------------------------- */
+extern uint32_t m_custom_ms_counter;
 extern void log_wait_ms(uint32_t ms);
 
 static uint8_t m_mode_ok = 0;
@@ -204,11 +205,21 @@ void twi_init (void)
  */
 void LM75B_read_sensor_data()
 {
+    static uint32_t data_ok_cnt = 0;
+    static uint32_t last_data_ms = 0;
+
     if ( m_mode_ok == 0 ) {
         LM75B_set_mode();
     }
     if ( m_mode_ok == 0 ) {
         return;
+    }
+
+    if ( data_ok_cnt >= 6 ) {
+        if ( last_data_ms != 0 && 
+                (m_custom_ms_counter - last_data_ms) < 10000 ) {
+            return;
+        }
     }
 
     m_twi_xfer_done = 0;
@@ -226,6 +237,7 @@ void LM75B_read_sensor_data()
 #endif
     if ( err_code != NRF_SUCCESS ) {
         m_mode_ok = 0;
+        data_ok_cnt = 0;
         NRF_LOG_WARNING(" failed data reading err code %d. ", err_code);
         NRF_LOG_WARNING(" error: %s", nrf_strerror_get(err_code));
 
@@ -241,6 +253,9 @@ void LM75B_read_sensor_data()
         wait_xfer_done_ms(20);
         twi_init();
 #endif
+    } else {
+        data_ok_cnt ++;
+        last_data_ms = m_custom_ms_counter;
     }
 }
 
@@ -274,5 +289,56 @@ int main(void)
     }
 }
 #endif
+/* -------------------------------------------------------------------- */
+#include "slip.h"
+
+static uint8_t slip_rx_buffer[512];
+static slip_t slip = {
+                .state          = SLIP_STATE_DECODING, 
+                .p_buffer       = slip_rx_buffer,
+                .current_index  = 0,
+                .buffer_len     = sizeof(slip_rx_buffer)};
+
+static uint8_t slip_tx_buffer[512];
+
+extern void slip_on_packet_received(uint8_t *buf, uint32_t len);
+
+void slip_reset(void)
+{
+    slip.state = SLIP_STATE_DECODING;
+    slip.current_index = 0;
+}
+
+void slip_rx_add_byte(uint8_t b)
+{
+    ret_code_t ret_code = slip_decode_add_byte(&slip, b);
+    switch (ret_code)
+    {
+        case NRF_SUCCESS:
+            slip_on_packet_received(slip.p_buffer, slip.current_index);
+            slip_reset();
+            break;
+        case NRF_ERROR_NO_MEM:
+            slip_reset();
+            break;
+        default:
+            // no implementation
+            break;
+    }
+}
+
+void slip_tx_send(uint8_t *input_buffer, uint16_t len)
+{
+    uint32_t output_length = 0;
+    slip_encode(slip_tx_buffer, input_buffer, len, &output_length);
+}
+
+void slip_on_packet_received(uint8_t *buf, uint32_t len)
+{
+    (void)buf;
+    (void)len;
+}
+
+/* -------------------------------------------------------------------- */
 
 /** @} */
