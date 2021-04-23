@@ -230,15 +230,15 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const * p_inst,
             {
                 /*Get amount of data transfered*/
                 size_t size = app_usbd_cdc_acm_rx_size(p_cdc_acm);
-                NRF_LOG_INFO("RX: size: %lu char: %c", size, m_rx_buffer[0]);
+                //NRF_LOG_INFO("RX: size: %lu char: %c", size, m_rx_buffer[0]);
+                if ( size == 1 ) { /* it should always be 1. */
+                    slip_rx_add_byte(m_rx_buffer[0]);
+                }
 
                 /* Fetch data until internal buffer is empty */
                 ret = app_usbd_cdc_acm_read(&m_app_cdc_acm,
                                             m_rx_buffer,
                                             READ_SIZE);
-                if ( ret == NRF_SUCCESS ) {
-                    slip_rx_add_byte(m_rx_buffer[0]);
-                }
             } while (ret == NRF_SUCCESS);
 
             bsp_board_led_invert(LED_CDC_ACM_RX);

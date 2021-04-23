@@ -337,6 +337,8 @@ void slip_on_packet_received(uint8_t *buf, uint32_t len)
 {
     (void)buf;
     (void)len;
+    NRF_LOG_INFO(" slip received: size: %u  char: %c 0x%02x 0x%02x", 
+                  len, buf[0], buf[0], (len>0?buf[len-1]:0xfff));
 }
 
 /* -------------------------------------------------------------------- */
